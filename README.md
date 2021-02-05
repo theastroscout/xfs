@@ -1,9 +1,13 @@
 # XFS
 File Synchronization With Your Remote Server Via SSH. Sublime Text 3 Plugin.
 
-## Requirements
+<br/>
+
+# Requirements
 1. MacOS
 2. Sublime Text 3
+
+<br/>
 
 # Installation
 1. Clone repository to your directory 
@@ -15,6 +19,8 @@ git clone https://github.com/hqdaemon/xfs XFS
 ```
 /Users/YOUR_USER_NAME/Library/Application\ Support/Sublime\ Text\ 3/Packages/
 ```
+
+<br/>
 
 # Setup
 1. Set configuration file
@@ -35,11 +41,12 @@ git clone https://github.com/hqdaemon/xfs XFS
 }
 ```
 
+<br/>
+
 # Usage
 Folder and files have different methods.
 
 ![Usage](img/usage.jpg?raw=true)
-
 
 <br />
 <br />
