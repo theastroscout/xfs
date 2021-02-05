@@ -17,6 +17,7 @@ git clone https://github.com/hqdaemon/xfs XFS
 
 # Setup
 1. Set configuration file
+
 ![Configuration](img/set-configuration.jpg?raw=true)
 
 2. Place your specification and save file
@@ -35,6 +36,7 @@ git clone https://github.com/hqdaemon/xfs XFS
 
 # Usage
 Folder and files have different methods.
+
 ![Usage](img/usage.jpg?raw=true)
 
 
