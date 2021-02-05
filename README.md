@@ -1,4 +1,5 @@
 # XFS
+File Synchronization With Your Remote Server Via SSH. Sublime Text 3 Plugin.
 
 ## Requirements
 1. MacOS
