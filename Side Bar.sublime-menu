@@ -1,0 +1,36 @@
+[
+	{ "caption": "-" },
+	{
+		"caption": "XFS",
+		"command": "xfs_check_menu",
+		"args": {"paths": []},
+		"children": [
+			{ "caption": "Upload File", "command": "xfs_upload_file", "args": {"paths": []} },
+			{ "caption": "Download File", "command": "xfs_download_file", "args": {"paths": []} },
+			{ "caption": "Upload Folder", "command": "xfs_upload_folder", "args": {"paths": []} },
+			{ "caption": "Download Folder", "command": "xfs_download_folder", "args": {"paths": []} },
+			
+			{ "caption": "-" },
+			
+			{ "caption": "Sync Remote Folder > Local Folder", "command": "xfs_sync_local_folder", "args": {"paths": []} },
+			{ "caption": "Sync Local Folder > Remote Folder", "command": "xfs_sync_remote_folder", "args": {"paths": []} },
+			
+			{ "caption": "-" },
+			
+			{ "caption": "Delete Remote File", "command": "xfs_delete_remote_file", "args": {"paths": []} },
+			{ "caption": "Delete Local & Remote File", "command": "xfs_delete_both_files", "args": {"paths": []} },
+
+			{ "caption": "Delete Remote Folder", "command": "xfs_delete_remote_folder", "args": {"paths": []} },
+			{ "caption": "Delete Local & Remote Folder", "command": "xfs_delete_both_folders", "args": {"paths": []} },
+			
+			{ "caption": "-" },
+
+			{ "caption": "Rename Local & Remote File", "command": "xfs_rename_file", "args": {"paths": []} },
+			{ "caption": "Rename Local & Remote Folder", "command": "xfs_rename_folder", "args": {"paths": []} },
+
+			{ "caption": "-" },
+			
+			{ "caption": "Configuration", "command": "xfs_configuration", "args": {"paths": []} }
+		]
+	}
+]
