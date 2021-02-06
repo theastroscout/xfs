@@ -6,6 +6,10 @@ from shutil import copyfile, rmtree
 import json
 import re
 
+def statusbar(msg):
+	sublime.active_window().status_message(' >>> [ XFS ] '+msg)
+	print(msg)
+
 # Upload Files Or Folders
 def upload(conf):
 	mkdirPath = conf['remoteDir']+conf['_clearDir'];
@@ -17,13 +21,13 @@ def upload(conf):
 		localDir = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
 		cmd = 'rsync -a '+localDir+' '+conf['ssh']+':'+remoteDir
 		ls = subprocess.Popen(cmd, shell=True)
-		print('File Uploaded Complete')
+		statusbar('File Uploaded Complete')
 	else:
 		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
 		localDir = conf['_localDir']+conf['_clearDir']+'/'
 		cmd = 'rsync -a '+conf['excludePattern']+' '+localDir+' '+conf['ssh']+':'+remoteDir
 		ls = subprocess.Popen(cmd, shell=True)
-		print('Folder Uploaded Complete')
+		statusbar('Folder Uploaded Complete')
 
 # Download Files Or Folders
 def download(conf, self):
@@ -32,13 +36,14 @@ def download(conf, self):
 		localDir = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
 		cmd = 'rsync -a '+conf['ssh']+':'+remoteDir+' '+localDir
 		ls = subprocess.Popen(cmd, shell=True)
-		print('File Downloaded Complete')
+		statusbar('File Downloaded Complete')
 	else:
+		statusbar('Folder Downloading...')
 		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
 		localDir = conf['_localDir']+conf['_clearDir']+'/'
 		cmd = 'rsync -a '+conf['excludePattern']+' '+conf['ssh']+':'+remoteDir+' '+localDir
 		ls = subprocess.Popen(cmd, shell=True)
-		print('Folder Downloaded Complete')
+		statusbar('Folder Downloaded Complete')
 
 	return True
 
@@ -54,9 +59,9 @@ def delete(conf,self,syncType=False):
 				os.remove(filePath)
 
 			sublime.set_timeout(lambda: self.window.run_command('revert'), 10)
-			print('Remote & Local Files Deleted Complete')
+			statusbar('Remote & Local Files Deleted Complete')
 		else:
-			print('Remote File Deleted Complete')
+			statusbar('Remote File Deleted Complete')
 	else:
 		cmd = 'ssh ' + conf['ssh'] + ' rm -rf '+conf['remoteDir']+conf['_clearDir']
 		ls = subprocess.Popen(cmd, shell=True)
@@ -65,9 +70,9 @@ def delete(conf,self,syncType=False):
 			targetFolder = conf['_localDir']+conf['_clearDir']
 			if os.path.exists(targetFolder):
 				rmtree(targetFolder)
-			print('Remote & Local Folders Deleted Complete')
+			statusbar('Remote & Local Folders Deleted Complete')
 		else:
-			print('Remote Folder Deleted Complete')
+			statusbar('Remote Folder Deleted Complete')
 
 	return True
 
@@ -87,7 +92,7 @@ def sync(conf,target=False):
 		out, err =  ls.communicate()
 		out = out.decode('UTF-8')
 		print(out)
-		print('Remote Folder Synchronized With Local Successfully')
+		statusbar('Remote Folder Synchronized With Local Successfully')
 	else:
 		cmd = 'rsync -avc --delete '+conf['excludePattern']+' '+conf['ssh']+':'+remoteDir+' '+localDir
 		print('CMD:', cmd)
@@ -95,7 +100,7 @@ def sync(conf,target=False):
 		out, err =  ls.communicate()
 		out = out.decode('UTF-8')
 		print(out)
-		print('Local Folder Synchronized With Remote Successfully')
+		statusbar('Local Folder Synchronized With Remote Successfully')
 
 global renameConf
 # Rename Files Or Folders
@@ -118,7 +123,7 @@ def rename(newName=False):
 		newLocalFile = localDir+newName
 		os.rename(oldLocalFile, newLocalFile)
 
-		print('File Renamed Successfully')
+		statusbar('File Renamed Successfully')
 	else:
 		rootChanged = False
 		oldFolderName = os.path.basename(conf['_clearDir'])
@@ -142,7 +147,7 @@ def rename(newName=False):
 		err = err.decode('UTF-8')
 
 		if len(err):
-			print('\nAn Error Has Occurred While Folder Renaming')
+			statusbar('\nAn Error Has Occurred While Folder Renaming')
 			print(err)
 		else:
 			if rootChanged:
@@ -155,7 +160,7 @@ def rename(newName=False):
 					json.dump(clearConf, outfile, indent=4)
 
 			os.rename(oldLocalFolder, newLocalFolder)
-			print('Folder Renamed Successfully')
+			statusbar('Folder Renamed Successfully')
 
 # Get Configuration File
 def getConfig(path):
