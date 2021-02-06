@@ -21,7 +21,7 @@ def upload(conf):
 	else:
 		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
 		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		cmd = 'rsync -a '+localDir+' '+conf['ssh']+':'+remoteDir
+		cmd = 'rsync -a '+conf['excludePattern']+' '+localDir+' '+conf['ssh']+':'+remoteDir
 		ls = subprocess.Popen(cmd, shell=True)
 		print('Folder Uploaded Complete')
 
@@ -36,7 +36,7 @@ def download(conf, self):
 	else:
 		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
 		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		cmd = 'rsync -a '+conf['ssh']+':'+remoteDir+' '+localDir
+		cmd = 'rsync -a '+conf['excludePattern']+' '+conf['ssh']+':'+remoteDir+' '+localDir
 		ls = subprocess.Popen(cmd, shell=True)
 		print('Folder Downloaded Complete')
 
@@ -73,24 +73,31 @@ def delete(conf,self,syncType=False):
 
 # Synchronize between Remote & Local Folders
 def sync(conf,target=False):	
-	localDir = conf['_localDir']+conf['_clearDir']+'/'
-	remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
+	localDir = conf['_localDir']+conf['_clearDir']
+	remoteDir = conf['remoteDir']+conf['_clearDir']
+	if re.search('/$', localDir) is None:
+		localDir += '/'
+
+	if re.search('/$', remoteDir) is None:
+		remoteDir += '/'
 
 	if target == 'remote':
-		cmd = 'rsync -a --delete '+localDir+' '+conf['ssh']+':'+remoteDir
+		cmd = 'rsync -avc --delete '+conf['excludePattern']+' '+localDir+' '+conf['ssh']+':'+remoteDir
 		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		out, err =  ls.communicate()
 		out = out.decode('UTF-8')
+		print(out)
 		print('Remote Folder Synchronized With Local Successfully')
 	else:
-		cmd = 'rsync -a --delete '+conf['ssh']+':'+remoteDir+' '+localDir
+		cmd = 'rsync -avc --delete '+conf['excludePattern']+' '+conf['ssh']+':'+remoteDir+' '+localDir
+		print('CMD:', cmd)
 		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		out, err =  ls.communicate()
 		out = out.decode('UTF-8')
+		print(out)
 		print('Local Folder Synchronized With Remote Successfully')
 
 global renameConf
-
 # Rename Files Or Folders
 def rename(newName=False):
 	global renameConf
@@ -168,6 +175,18 @@ def getConfig(path):
 			else:
 				conf['_fileName'] = False
 				conf['_clearDir'] = path.replace(localDir,'')
+
+			
+			if conf['_clearDir']+'/' == conf['_localDir']:
+				conf['_clearDir'] = ''
+
+			if len(conf['exclude']) > 1:
+				exclude = ','.join('"{0}"'.format(e) for e in conf['exclude'])
+				conf['excludePattern'] = '--exclude={'+exclude+'}'
+			elif len(conf['exclude']) == 1:
+				conf['excludePattern'] = '--exclude "'+conf['exclude'][0]+'"'
+			else:
+				conf['excludePattern'] = ''
 
 			return conf;
 			break

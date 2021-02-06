@@ -34,9 +34,16 @@ git clone https://github.com/hqdaemon/xfs XFS
 	"ssh": "USER_NAME@HOST_NAME",
 	"upload_on_save": false,
 	"exclude": [
-		".*/node_modules.*",
-		".*\\.git.*",
-		".*xfs-config.json"
+		"node_modules",
+		".git",
+		".DS_Store",
+		"Thumbs.db",
+		"/venv/",
+		".svn",
+		".hg",
+		"_darcs",
+		".sublime-(project|workspace)",
+		"xfs-config.json"
 	]
 }
 ```
