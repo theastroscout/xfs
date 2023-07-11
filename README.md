@@ -12,7 +12,7 @@ File Synchronization With Your Remote Server Via SSH. Sublime Text 3 Plugin.
 # Installation
 1. Clone repository to your directory 
 ```
-git clone https://github.com/hqdaemon/xfs XFS
+git clone https://github.com/theastroscout/xfs XFS
 ```
 
 2. Place XFS Folder into your Sublime Text 3 Packages Directory
@@ -62,7 +62,7 @@ Folder and files have different methods.
 
 ## MIT License
 
-Copyright (c) HQ • [hqmode.com](https://hqmode.com)
+Alexander Yermolenko • [surfy.one](https://surfy.one)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
