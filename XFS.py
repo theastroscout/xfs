@@ -19,14 +19,14 @@ def upload(conf):
 	if conf['_fileName']:
 		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'+conf['_fileName']
 		localDir = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a '+localDir+' '+conf['ssh']+':'+remoteDir
+		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a "'+localDir+'" "'+conf['ssh']+':\"'+remoteDir+'\""'
 		ls = subprocess.Popen(cmd, shell=True)
-		print(cmd)
+		print('UPLOAD',cmd)
 		statusbar('File Uploaded Complete 3')
 	else:
 		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
 		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a '+conf['excludePattern']+' '+localDir+' '+conf['ssh']+':'+remoteDir
+		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a '+conf['excludePattern']+' "'+localDir+'" "'+conf['ssh']+':\"'+remoteDir + '\""'
 		ls = subprocess.Popen(cmd, shell=True)
 		statusbar('Folder Uploaded Complete !')
 
@@ -35,14 +35,14 @@ def download(conf, self):
 	if conf['_fileName']:
 		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'+conf['_fileName']
 		localDir = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
-		cmd = 'rsync -a '+conf['ssh']+':'+remoteDir+' '+localDir
+		cmd = 'rsync -a "'+conf['ssh']+':\"'+remoteDir+'\"" "' + localDir + '"'
 		ls = subprocess.Popen(cmd, shell=True)
 		statusbar('File Downloaded Complete')
 	else:
 		statusbar('Folder Downloading...')
 		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
 		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		cmd = 'rsync -a '+conf['excludePattern']+' '+conf['ssh']+':'+remoteDir+' '+localDir
+		cmd = 'rsync -a '+conf['excludePattern']+' "'+conf['ssh']+':\"'+remoteDir+'\"" "'+localDir+'"'
 		ls = subprocess.Popen(cmd, shell=True)
 		statusbar('Folder Downloaded Complete')
 
@@ -88,14 +88,14 @@ def sync(conf,target=False):
 		remoteDir += '/'
 
 	if target == 'remote':
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -avc --delete '+conf['excludePattern']+' '+localDir+' '+conf['ssh']+':'+remoteDir
+		cmd = 'rsync --chmod=a+rwx,g-w,o-w -avc --delete '+conf['excludePattern']+' "'+localDir+'" "'+conf['ssh']+':\"'+remoteDir + '\""'
 		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		out, err =  ls.communicate()
 		out = out.decode('UTF-8')
 		print(out)
 		statusbar('Remote Folder Synchronized With Local Successfully')
 	else:
-		cmd = 'rsync -avc --delete '+conf['excludePattern']+' '+conf['ssh']+':'+remoteDir+' '+localDir
+		cmd = 'rsync -avc --delete '+conf['excludePattern']+' "'+conf['ssh']+':\"'+remoteDir+'\"" "'+localDir+'"'
 		print('CMD:', cmd)
 		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		out, err =  ls.communicate()
