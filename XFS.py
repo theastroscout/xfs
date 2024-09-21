@@ -26,8 +26,9 @@ def upload(conf):
 	else:
 		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
 		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a '+conf['excludePattern']+' "'+localDir+'" "'+conf['ssh']+':\"'+remoteDir + '\""'
+		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a '+conf['excludePattern']+' "'+localDir+'" '+conf['ssh']+':"'+remoteDir + '"'
 		ls = subprocess.Popen(cmd, shell=True)
+		print('Upload Folder', cmd)
 		statusbar('Folder Uploaded Complete !')
 
 # Download Files Or Folders

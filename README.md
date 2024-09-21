@@ -1,11 +1,12 @@
 # XFS
-File Synchronization With Your Remote Server Via SSH. Sublime Text 3 Plugin.
+Sync files with remote server using Rsync via SSH. Sublime Text 3 Plugin.
 
 <br/>
 
 # Requirements
 1. MacOS
 2. Sublime Text 3
+3. Rsync
 
 <br/>
 
@@ -23,14 +24,12 @@ git clone https://github.com/theastroscout/xfs XFS
 <br/>
 
 # Setup
-1. Set configuration file
 
 ![Configuration](img/set-configuration.jpg?raw=true)
 
-2. Place your specification and save file
 ```json
 {
-	"remoteDir": "/REMOTE_PATH_TO_SYNC/",
+	"remoteDir": "/REMOTE_PATH_TO_SYNC",
 	"ssh": "USER_NAME@HOST_NAME",
 	"upload_on_save": false,
 	"exclude": [
@@ -51,7 +50,6 @@ git clone https://github.com/theastroscout/xfs XFS
 <br/>
 
 # Usage
-Folder and files have different methods.
 
 ![Usage](img/usage.jpg?raw=true)
 
@@ -60,24 +58,12 @@ Folder and files have different methods.
 <br />
 <br />
 
-## MIT License
+## CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
 
-Alexander Yermolenko • [surfy.one](https://surfy.one)
+The person who associated a work with this deed has dedicated the work to the public domain by waiving all of his or her rights to the work worldwide under copyright law, including all related and neighbouring rights, to the extent allowed by law.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+You can copy, modify, distribute, and perform the work, even for commercial purposes, all without asking permission.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The work is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the work or the use or other dealings in the work.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+For more information, see <https://creativecommons.org/publicdomain/zero/1.0/>

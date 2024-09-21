@@ -1,5 +1,5 @@
 {
-	"remoteDir": "/REMOTE_PATH_TO_SYNC/",
+	"remoteDir": "/REMOTE_PATH_TO_SYNC",
 	"ssh": "USER_NAME@HOST_NAME",
 	"upload_on_save": false,
 	"exclude": [
