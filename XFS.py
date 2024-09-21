@@ -29,7 +29,7 @@ def upload(conf):
 		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a '+conf['excludePattern']+' "'+localDir+'" '+conf['ssh']+':"'+remoteDir + '"'
 		ls = subprocess.Popen(cmd, shell=True)
 		print('Upload Folder', cmd)
-		statusbar('Folder Uploaded Complete !')
+		statusbar('@XFS >>>> Folder Uploaded')
 
 # Download Files Or Folders
 def download(conf, self):
@@ -168,9 +168,9 @@ def rename(newName=False):
 def getConfig(path):
 	chunks = path.split('/')
 	while len(chunks):
-		localDir = '/'.join(chunks)+'/'
-		if os.path.isfile(localDir+'xfs-config.json'):
-			f = open(localDir+'xfs-config.json',)
+		localDir = '/'.join(chunks)
+		if os.path.isfile(localDir + '/xfs-config.json'):
+			f = open(localDir + '/xfs-config.json',)
 			conf = json.load(f)
 			f.close()
 
@@ -184,6 +184,7 @@ def getConfig(path):
 				conf['_clearDir'] = path.replace(localDir,'')
 
 			
+			print('>>>>',conf['_clearDir'])
 			if conf['_clearDir']+'/' == conf['_localDir']:
 				conf['_clearDir'] = ''
 
