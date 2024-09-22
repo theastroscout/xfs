@@ -4,9 +4,8 @@ Sync files with remote server using Rsync via SSH. Sublime Text 3 Plugin.
 <br/>
 
 # Requirements
-1. MacOS
-2. Sublime Text 3
-3. Rsync
+- Sublime Text 3
+- Rsync
 
 <br/>
 
