@@ -12,42 +12,70 @@ def statusbar(msg):
 
 # Upload Files Or Folders
 def upload(conf):
-	mkdirPath = conf['remoteDir']+conf['_clearDir'];
+	mkdirPath = conf['remoteDir'] + conf['_clearDir']
+	cmd = 'ssh {} "mkdir -p \'{}\'"'.format(conf['ssh'], mkdirPath)
+	subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-	ls = subprocess.Popen(['ssh', conf['ssh'], 'mkdir -p '+mkdirPath], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	remoteDir = conf['remoteDir'] + conf['_clearDir'] + '/'
+	localDir = conf['_localDir'] + conf['_clearDir'] + '/'
 
 	if conf['_fileName']:
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'+conf['_fileName']
-		localDir = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a "'+localDir+'" "'+conf['ssh']+':\"'+remoteDir+'\""'
-		ls = subprocess.Popen(cmd, shell=True)
-		print('UPLOAD',cmd)
-		statusbar('File Uploaded Complete 3')
+		# File
+		file_name = conf['_fileName']
+		for pattern in conf.get('exclude', []):
+			p = pattern.strip('/')
+			if file_name == p or file_name.endswith('/' + p):
+				print('@XFS. File excluded by pattern: {}'.format(p))
+				statusbar('@XFS. File excluded')
+				return
+
+		remoteFile = remoteDir + file_name
+		localFile = localDir + file_name
+		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a "{}" {}:"{}"'.format(localFile, conf['ssh'], remoteFile)
+		print('@XFS. File Uploaded:', cmd)
+		statusbar('@XFS. File Uploaded')
 	else:
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
-		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a '+conf['excludePattern']+' "'+localDir+'" '+conf['ssh']+':"'+remoteDir + '"'
-		ls = subprocess.Popen(cmd, shell=True)
-		print('Upload Folder', cmd)
-		statusbar('@XFS >>>> Folder Uploaded')
+		# Directory
+		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a {} "{}" {}:"{}"'.format(
+			conf['excludePattern'], localDir, conf['ssh'], remoteDir)
+		print('@XFS. Folder Uploaded:', cmd)
+		statusbar('@XFS. Folder Uploaded')
+
+	subprocess.Popen(cmd, shell=True)
+
+
 
 # Download Files Or Folders
 def download(conf, self):
 	if conf['_fileName']:
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'+conf['_fileName']
-		localDir = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
-		cmd = 'rsync -a "'+conf['ssh']+':\"'+remoteDir+'\"" "' + localDir + '"'
-		ls = subprocess.Popen(cmd, shell=True)
+		# File
+		file_name = conf['_fileName']
+		for pattern in conf.get('exclude', []):
+			p = pattern.strip('/')
+			if file_name == p or file_name.endswith('/' + p):
+				print('@XFS. File excluded by pattern: {}'.format(p))
+				statusbar('@XFS. File excluded')
+				return False
+
+		remoteFile = conf['remoteDir'] + conf['_clearDir'] + '/' + file_name
+		localFile = conf['_localDir'] + conf['_clearDir'] + '/' + file_name
+		cmd = 'rsync -a {}:"{}" "{}"'.format(conf['ssh'], remoteFile, localFile)
+		print('@XFS. File Downloaded:', cmd)
+		subprocess.Popen(cmd, shell=True)
 		statusbar('File Downloaded Complete')
+
 	else:
+		# Folder
 		statusbar('Folder Downloading...')
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
-		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		cmd = 'rsync -a '+conf['excludePattern']+' "'+conf['ssh']+':\"'+remoteDir+'\"" "'+localDir+'"'
-		ls = subprocess.Popen(cmd, shell=True)
+		remoteDir = conf['remoteDir'] + conf['_clearDir'] + '/'
+		localDir = conf['_localDir'] + conf['_clearDir'] + '/'
+		cmd = 'rsync -a {} {}:"{}" "{}"'.format(conf['excludePattern'], conf['ssh'], remoteDir, localDir)
+		print('@XFS. Folder Downloaded:', cmd)
+		subprocess.Popen(cmd, shell=True)
 		statusbar('Folder Downloaded Complete')
 
 	return True
+
 
 # Delete Files Or Folders
 def delete(conf,self,syncType=False):
@@ -79,30 +107,38 @@ def delete(conf,self,syncType=False):
 	return True
 
 # Synchronize between Remote & Local Folders
-def sync(conf,target=False):	
-	localDir = conf['_localDir']+conf['_clearDir']
-	remoteDir = conf['remoteDir']+conf['_clearDir']
-	if re.search('/$', localDir) is None:
-		localDir += '/'
+def sync(conf, target=False):
+	localDir = conf['_localDir'] + conf['_clearDir']
+	remoteDir = conf['remoteDir'] + conf['_clearDir']
 
-	if re.search('/$', remoteDir) is None:
+	if not localDir.endswith('/'):
+		localDir += '/'
+	if not remoteDir.endswith('/'):
 		remoteDir += '/'
 
 	if target == 'remote':
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -avc --delete '+conf['excludePattern']+' "'+localDir+'" "'+conf['ssh']+':\"'+remoteDir + '\""'
-		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		out, err =  ls.communicate()
-		out = out.decode('UTF-8')
-		print(out)
+		cmd = 'rsync --chmod=a+rwx,g-w,o-w -avc --delete {} "{}" {}:"{}"'.format(
+			conf['excludePattern'], localDir, conf['ssh'], remoteDir)
+		statusbar('Synchronizing: Local → Remote')
+	else:
+		cmd = 'rsync -avc --delete {} {}:"{}" "{}"'.format(
+			conf['excludePattern'], conf['ssh'], remoteDir, localDir)
+		statusbar('Synchronizing: Remote → Local')
+
+	print('@XFS. Sync:', cmd)
+	ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	out, err = ls.communicate()
+
+	if out:
+		print(out.decode('utf-8'))
+	if err:
+		print(err.decode('utf-8'))
+
+	if target == 'remote':
 		statusbar('Remote Folder Synchronized With Local Successfully')
 	else:
-		cmd = 'rsync -avc --delete '+conf['excludePattern']+' "'+conf['ssh']+':\"'+remoteDir+'\"" "'+localDir+'"'
-		print('CMD:', cmd)
-		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		out, err =  ls.communicate()
-		out = out.decode('UTF-8')
-		print(out)
 		statusbar('Local Folder Synchronized With Remote Successfully')
+
 
 global renameConf
 # Rename Files Or Folders
@@ -170,35 +206,36 @@ def getConfig(path):
 	while len(chunks):
 		localDir = '/'.join(chunks)
 		if os.path.isfile(localDir + '/xfs-config.json'):
-			f = open(localDir + '/xfs-config.json',)
-			conf = json.load(f)
-			f.close()
+			with open(localDir + '/xfs-config.json') as f:
+				conf = json.load(f)
 
 			conf['_filePath'] = path
 			conf['_localDir'] = localDir
+
 			if os.path.isfile(path):
 				conf['_fileName'] = os.path.basename(path)
-				conf['_clearDir'] = os.path.dirname(path.replace(localDir,''))
+				conf['_clearDir'] = os.path.dirname(path.replace(localDir, ''))
 			else:
 				conf['_fileName'] = False
-				conf['_clearDir'] = path.replace(localDir,'')
+				conf['_clearDir'] = path.replace(localDir, '')
 
-			print('>>>>',conf['_clearDir'])
-			if conf['_clearDir']+'/' == conf['_localDir']:
+			print('>>>>', conf['_clearDir'])
+
+			if conf['_clearDir'] + '/' == conf['_localDir']:
 				conf['_clearDir'] = ''
 
-			# Build excludePattern properly for rsync
+			# Build excludePattern for rsync
 			exclude_flags = []
 			for pattern in conf.get('exclude', []):
-				p = pattern.lstrip('/')
-				exclude_flags.append("--exclude=" + json.dumps(p))
+				p = pattern.strip().strip('/')
+				exclude_flags.append("--exclude=" + p)
 			conf['excludePattern'] = ' '.join(exclude_flags)
 
 
 
-			return conf;
-			break
-		chunks.pop()		
+			return conf
+
+		chunks.pop()
 
 	return False
 
