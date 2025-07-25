@@ -20,15 +20,8 @@ def upload(conf):
 	localDir = conf['_localDir'] + conf['_clearDir'] + '/'
 
 	if conf['_fileName']:
-		# File
+		# File (exclude check removed)
 		file_name = conf['_fileName']
-		for pattern in conf.get('exclude', []):
-			p = pattern.strip('/')
-			if file_name == p or file_name.endswith('/' + p):
-				print('@XFS. File excluded by pattern: {}'.format(p))
-				statusbar('@XFS. File excluded')
-				return
-
 		remoteFile = remoteDir + file_name
 		localFile = localDir + file_name
 		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a "{}" {}:"{}"'.format(localFile, conf['ssh'], remoteFile)
@@ -42,6 +35,7 @@ def upload(conf):
 		statusbar('@XFS. Folder Uploaded')
 
 	subprocess.Popen(cmd, shell=True)
+
 
 
 
@@ -246,6 +240,20 @@ class XfsSyncCommand(sublime_plugin.ViewEventListener):
 		conf = getConfig(self.view.file_name())
 		if not conf or not conf['upload_on_save']:
 			return False
+
+		full_path = self.view.file_name()
+		file_name = os.path.basename(full_path)
+		rel_path = os.path.relpath(full_path, conf['_localDir'])
+
+		for pattern in conf.get('exclude', []):
+			p = pattern.strip('/')
+
+			# Match exact filename or directory name
+			if file_name == p or rel_path.startswith(p + os.sep) or rel_path == p:
+				print('@XFS. Skipped upload_on_save for excluded path: {}'.format(p))
+				statusbar('@XFS. Skipped excluded file/folder')
+				return False
+
 		upload(conf)
 
 # Upload File
