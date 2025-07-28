@@ -111,11 +111,11 @@ def sync(conf, target=False):
 		remoteDir += '/'
 
 	if target == 'remote':
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -avc --delete {} "{}" {}:"{}"'.format(
+		cmd = 'rsync --chmod=a+rwx,g-w,o-w -avc --delete --delete-excluded {} "{}" {}:"{}"'.format(
 			conf['excludePattern'], localDir, conf['ssh'], remoteDir)
 		statusbar('Synchronizing: Local → Remote')
 	else:
-		cmd = 'rsync -avc --delete {} {}:"{}" "{}"'.format(
+		cmd = 'rsync -avc --delete --delete-excluded {} {}:"{}" "{}"'.format(
 			conf['excludePattern'], conf['ssh'], remoteDir, localDir)
 		statusbar('Synchronizing: Remote → Local')
 
