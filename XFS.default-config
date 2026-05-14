@@ -1,17 +1,21 @@
 {
 	"remoteDir": "/REMOTE_PATH_TO_SYNC",
 	"ssh": "USER_NAME@HOST_NAME",
-	"upload_on_save": false,
+	"upload_on_save": true,
 	"exclude": [
 		"node_modules",
 		".git",
 		".DS_Store",
+		"__pycache__",
 		"Thumbs.db",
-		"/venv/",
+		"env",
 		".svn",
 		".hg",
 		"_darcs",
-		".sublime-(project|workspace)",
+		"models",
+		"onnx",
+		".sublime-project",
+		".sublime-workspace",
 		"xfs-config.json"
 	]
 }

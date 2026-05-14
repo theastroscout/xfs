@@ -6,848 +6,583 @@ from shutil import copyfile, rmtree
 import json
 import re
 
-def statusbar(msg):
-	sublime.active_window().status_message(' >>> [ XFS ] '+msg)
-	print(msg)
-
-# Upload Files Or Folders
-def upload(conf):
-	mkdirPath = conf['remoteDir'] + conf['_clearDir']
-	cmd = 'ssh {} "mkdir -p \'{}\'"'.format(conf['ssh'], mkdirPath)
-	subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-	remoteDir = conf['remoteDir'] + conf['_clearDir'] + '/'
-	localDir = conf['_localDir'] + conf['_clearDir'] + '/'
-
-	if conf['_fileName']:
-		# File (exclude check removed)
-		file_name = conf['_fileName']
-		remoteFile = remoteDir + file_name
-		localFile = localDir + file_name
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a "{}" {}:"{}"'.format(localFile, conf['ssh'], remoteFile)
-		print('@XFS. File Uploaded:', cmd)
-		statusbar('@XFS. File Uploaded')
-	else:
-		# Directory
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a {} "{}" {}:"{}"'.format(
-			conf['excludePattern'], localDir, conf['ssh'], remoteDir)
-		print('@XFS. Folder Uploaded:', cmd)
-		statusbar('@XFS. Folder Uploaded')
-
-	subprocess.Popen(cmd, shell=True)
-
-
-
-
-# Download Files Or Folders
-def download(conf, self):
-	if conf['_fileName']:
-		# File
-		file_name = conf['_fileName']
-		for pattern in conf.get('exclude', []):
-			p = pattern.strip('/')
-			if file_name == p or file_name.endswith('/' + p):
-				print('@XFS. File excluded by pattern: {}'.format(p))
-				statusbar('@XFS. File excluded')
-				return False
-
-		remoteFile = conf['remoteDir'] + conf['_clearDir'] + '/' + file_name
-		localFile = conf['_localDir'] + conf['_clearDir'] + '/' + file_name
-		cmd = 'rsync -a {}:"{}" "{}"'.format(conf['ssh'], remoteFile, localFile)
-		print('@XFS. File Downloaded:', cmd)
-		subprocess.Popen(cmd, shell=True)
-		statusbar('File Downloaded Complete')
-
-	else:
-		# Folder
-		statusbar('Folder Downloading...')
-		remoteDir = conf['remoteDir'] + conf['_clearDir'] + '/'
-		localDir = conf['_localDir'] + conf['_clearDir'] + '/'
-		cmd = 'rsync -a {} {}:"{}" "{}"'.format(conf['excludePattern'], conf['ssh'], remoteDir, localDir)
-		print('@XFS. Folder Downloaded:', cmd)
-		subprocess.Popen(cmd, shell=True)
-		statusbar('Folder Downloaded Complete')
-
-	return True
-
-
-# Delete Files Or Folders
-def delete(conf,self,syncType=False):
-	if conf['_fileName']:
-		cmd = 'ssh ' + conf['ssh'] + ' rm '+conf['remoteDir']+conf['_clearDir']+'/'+conf['_fileName']
-		ls = subprocess.Popen(cmd, shell=True)
-		
-		if syncType == 'both':
-			filePath = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
-			if os.path.exists(filePath):
-				os.remove(filePath)
-
-			sublime.set_timeout(lambda: self.window.run_command('revert'), 10)
-			statusbar('Remote & Local Files Deleted Complete')
-		else:
-			statusbar('Remote File Deleted Complete')
-	else:
-		cmd = 'ssh ' + conf['ssh'] + ' rm -rf '+conf['remoteDir']+conf['_clearDir']
-		ls = subprocess.Popen(cmd, shell=True)
-
-		if syncType == 'both':
-			targetFolder = conf['_localDir']+conf['_clearDir']
-			if os.path.exists(targetFolder):
-				rmtree(targetFolder)
-			statusbar('Remote & Local Folders Deleted Complete')
-		else:
-			statusbar('Remote Folder Deleted Complete')
-
-	return True
-
-# Synchronize between Remote & Local Folders
-def sync(conf, target=False):
-	localDir = conf['_localDir'] + conf['_clearDir']
-	remoteDir = conf['remoteDir'] + conf['_clearDir']
-
-	if not localDir.endswith('/'):
-		localDir += '/'
-	if not remoteDir.endswith('/'):
-		remoteDir += '/'
-
-	if target == 'remote':
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -avc --delete --delete-excluded {} "{}" {}:"{}"'.format(
-			conf['excludePattern'], localDir, conf['ssh'], remoteDir)
-		statusbar('Synchronizing: Local → Remote')
-	else:
-		cmd = 'rsync -avc --delete --delete-excluded {} {}:"{}" "{}"'.format(
-			conf['excludePattern'], conf['ssh'], remoteDir, localDir)
-		statusbar('Synchronizing: Remote → Local')
-
-	print('@XFS. Sync:', cmd)
-	ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	out, err = ls.communicate()
-
-	if out:
-		print(out.decode('utf-8'))
-	if err:
-		print(err.decode('utf-8'))
-
-	if target == 'remote':
-		statusbar('Remote Folder Synchronized With Local Successfully')
-	else:
-		statusbar('Local Folder Synchronized With Remote Successfully')
-
-
-global renameConf
-# Rename Files Or Folders
-def rename(newName=False):
-	global renameConf
-	if not newName:
-		renameConf = False
-		return False
-	
-	conf = renameConf
-	if conf['_fileName']:
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
-		oldRemoteFile = remoteDir+conf['_fileName']
-		newRemoteFile = remoteDir+newName
-		cmd = 'ssh ' + conf['ssh'] + ' mv '+oldRemoteFile+' '+newRemoteFile
-		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		oldLocalFile = localDir+conf['_fileName']
-		newLocalFile = localDir+newName
-		os.rename(oldLocalFile, newLocalFile)
-
-		statusbar('File Renamed Successfully')
-	else:
-		rootChanged = False
-		oldFolderName = os.path.basename(conf['_clearDir'])
-
-		if conf['_filePath'] == conf['_clearDir']:
-			rootChanged = True
-			oldRemoteFolder = conf['remoteDir']
-		else:
-			oldRemoteFolder = conf['remoteDir']+conf['_clearDir']+'/'
-
-		newRemoteFolder = re.sub(oldFolderName+'/$',newName+'/',oldRemoteFolder)
-
-		oldLocalFolder = conf['_filePath']
-		newLocalFolder = re.sub(oldFolderName+'$',newName,oldLocalFolder)
-
-		cmd = 'ssh ' + conf['ssh'] + ' mv '+oldRemoteFolder+' '+newRemoteFolder
-
-		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		out, err =  ls.communicate()
-		out = out.decode('UTF-8')
-		err = err.decode('UTF-8')
-
-		if len(err):
-			statusbar('\nAn Error Has Occurred While Folder Renaming')
-			print(err)
-		else:
-			if rootChanged:
-				confPath = conf['_localDir']+'xfs-config.json'
-				f = open(confPath, 'r')
-				clearConf = json.load(f)
-				f.close()
-				clearConf['remoteDir'] = newRemoteFolder
-				with open(confPath, 'w') as outfile:
-					json.dump(clearConf, outfile, indent=4)
-
-			os.rename(oldLocalFolder, newLocalFolder)
-			statusbar('Folder Renamed Successfully')
-
-# Get Configuration File
-def getConfig(path):
-	chunks = path.split('/')
-	while len(chunks):
-		localDir = '/'.join(chunks)
-		if os.path.isfile(localDir + '/xfs-config.json'):
-			with open(localDir + '/xfs-config.json') as f:
-				conf = json.load(f)
-
-			conf['_filePath'] = path
-			conf['_localDir'] = localDir
-
-			if os.path.isfile(path):
-				conf['_fileName'] = os.path.basename(path)
-				conf['_clearDir'] = os.path.dirname(path.replace(localDir, ''))
-			else:
-				conf['_fileName'] = False
-				conf['_clearDir'] = path.replace(localDir, '')
-
-			print('>>>>', conf['_clearDir'])
-
-			if conf['_clearDir'] + '/' == conf['_localDir']:
-				conf['_clearDir'] = ''
-
-			# Build excludePattern for rsync
-			exclude_flags = []
-			for pattern in conf.get('exclude', []):
-				p = pattern.strip().strip('/')
-				exclude_flags.append("--exclude=" + p)
-			conf['excludePattern'] = ' '.join(exclude_flags)
-
-
-
-			return conf
-
-		chunks.pop()
-
-	return False
-
-
-# Upload On Save
-class XfsSyncCommand(sublime_plugin.ViewEventListener):
-	def on_post_save(self):
-		conf = getConfig(self.view.file_name())
-		if not conf or not conf['upload_on_save']:
-			return False
-
-		full_path = self.view.file_name()
-		file_name = os.path.basename(full_path)
-		rel_path = os.path.relpath(full_path, conf['_localDir'])
-
-		for pattern in conf.get('exclude', []):
-			p = pattern.strip('/')
-
-			# Match exact filename or directory name
-			if file_name == p or rel_path.startswith(p + os.sep) or rel_path == p:
-				print('@XFS. Skipped upload_on_save for excluded path: {}'.format(p))
-				statusbar('@XFS. Skipped excluded file/folder')
-				return False
-
-		upload(conf)
-
-# Upload File
-class XfsUploadFileCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		upload(conf)
-
-	def is_visible(args, paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Download File
-class XfsDownloadFileCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		download(conf, self)
-
-	def is_visible(args, paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Upload Folder
-class XfsUploadFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-
-		upload(conf)
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Downlload Folder
-class XfsDownloadFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-
-		download(conf, self)
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Sync Local Folder
-class XfsSyncLocalFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		sync(conf, 'local')
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Sync Remote Folder
-class XfsSyncRemoteFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		sync(conf, 'remote')
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Delete Remote File
-class XfsDeleteRemoteFileCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		delete(conf, self, 'remote')
-
-	def is_visible(args,paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Delete Remote & Local File
-class XfsDeleteBothFilesCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		delete(conf, self, 'both')
-
-	def is_visible(args,paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Delete Remote Folder
-class XfsDeleteRemoteFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		delete(conf, self, 'remote')
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Delete Remote & Local Folders
-class XfsDeleteBothFoldersCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		delete(conf, self, 'both')
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Rename File
-class XfsRenameFileCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		global renameConf
-		renameConf = conf
-		self.window.show_input_panel('Rename File',conf['_fileName'],rename,None,rename)
-
-	def is_visible(args,paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True	
-
-# Rename Folder
-class XfsRenameFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		global renameConf
-		renameConf = conf
-		self.window.show_input_panel('Rename Folder',os.path.basename(conf['_clearDir']),rename,None,rename)
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True		
-
-# Configuration
-class XfsConfigurationCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		print('SETTING UP CONFIG')
-		if len(paths):
-			confPath = paths[0]+'/xfs-config.json'
-			if not os.path.isfile(confPath):
-				defaultConf = sublime.packages_path() + '/XFS/XFS.default-config'
-				print('Create New Config From: ', defaultConf, 'To:', confPath)
-				copyfile(defaultConf, confPath)
-
-			self.window.open_file(confPath, sublime.ENCODED_POSITION)
-
-	def is_visible(args,paths=[]):
-		return True
-
-
-
-'''
-import sublime
-import sublime_plugin
-import os
-import subprocess
-from shutil import copyfile, rmtree
-import json
-import re
+# ─────────────────────────────────────────────
+#  Helpers
+# ─────────────────────────────────────────────
 
 def statusbar(msg):
-	sublime.active_window().status_message(' >>> [ XFS ] '+msg)
-	print(msg)
+    sublime.active_window().status_message(' >>> [ XFS ] ' + msg)
+    print('[XFS]', msg)
 
-# Upload Files Or Folders
+
+def confirm(title, message):
+    """Show a yes/no dialog. Returns True if user confirms."""
+    return sublime.ok_cancel_dialog(message, ok_title='Yes', title=title)
+
+
+def run_cmd(cmd):
+    """Run a shell command and return (returncode, stdout, stderr)."""
+    proc = subprocess.Popen(
+        cmd, shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    out, err = proc.communicate()
+    return proc.returncode, out.decode('utf-8'), err.decode('utf-8')
+
+
+def shell_quote(path):
+    """Wrap a path in single quotes, escaping any single quotes within."""
+    return "'" + path.replace("'", "'\\''") + "'"
+
+
+# ─────────────────────────────────────────────
+#  Config
+# ─────────────────────────────────────────────
+
+# Config file name — always excluded from every operation
+CONFIG_FILE = 'xfs-config.json'
+
+
+def get_config(path):
+    """
+    Walk up the directory tree looking for xfs-config.json.
+    Returns an enriched conf dict, or False if none found.
+    """
+    chunks = path.split('/')
+    while chunks:
+        local_dir = '/'.join(chunks)
+        config_path = local_dir + '/' + CONFIG_FILE
+        if os.path.isfile(config_path):
+            try:
+                with open(config_path) as f:
+                    conf = json.load(f)
+            except (json.JSONDecodeError, OSError) as e:
+                statusbar('Error reading config: {}'.format(e))
+                return False
+
+            conf['_filePath'] = path
+            conf['_localDir'] = local_dir
+
+            if os.path.isfile(path):
+                conf['_fileName'] = os.path.basename(path)
+                conf['_clearDir'] = os.path.dirname(path.replace(local_dir, ''))
+            else:
+                conf['_fileName'] = False
+                conf['_clearDir'] = path.replace(local_dir, '')
+
+            if conf['_clearDir'] + '/' == local_dir:
+                conf['_clearDir'] = ''
+
+            # Always protect xfs-config.json — append if not already listed
+            exclude = list(conf.get('exclude', []))
+            if CONFIG_FILE not in exclude:
+                exclude.append(CONFIG_FILE)
+
+            # Build rsync --exclude flags
+            exclude_flags = ['--exclude={}'.format(p.strip().strip('/')) for p in exclude]
+            conf['excludePattern'] = ' '.join(exclude_flags)
+            conf['exclude'] = exclude
+
+            return conf
+
+        chunks.pop()
+
+    return False
+
+
+# ─────────────────────────────────────────────
+#  Core operations
+# ─────────────────────────────────────────────
+
 def upload(conf):
-	mkdirPath = conf['remoteDir']+conf['_clearDir'];
+    """Upload a file or folder to the remote server."""
+    remote_base = conf['remoteDir'] + conf['_clearDir']
 
-	ls = subprocess.Popen(['ssh', conf['ssh'], 'mkdir -p '+mkdirPath], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # Ensure remote directory exists
+    rc, _, err = run_cmd('ssh {} "mkdir -p {}"'.format(
+        conf['ssh'], shell_quote(remote_base)))
+    if rc != 0:
+        statusbar('mkdir failed: ' + err.strip())
+        return False
 
-	if conf['_fileName']:
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'+conf['_fileName']
-		localDir = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a "'+localDir+'" "'+conf['ssh']+':\"'+remoteDir+'\""'
-		ls = subprocess.Popen(cmd, shell=True)
-		print('UPLOAD',cmd)
-		statusbar('File Uploaded Complete 3')
-	else:
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
-		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -a '+conf['excludePattern']+' "'+localDir+'" '+conf['ssh']+':"'+remoteDir + '"'
-		ls = subprocess.Popen(cmd, shell=True)
-		print('Upload Folder', cmd)
-		statusbar('@XFS >>>> Folder Uploaded')
+    remote_dir = remote_base + '/'
+    local_dir  = conf['_localDir'] + conf['_clearDir'] + '/'
 
-# Download Files Or Folders
-def download(conf, self):
-	if conf['_fileName']:
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'+conf['_fileName']
-		localDir = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
-		cmd = 'rsync -a "'+conf['ssh']+':\"'+remoteDir+'\"" "' + localDir + '"'
-		ls = subprocess.Popen(cmd, shell=True)
-		statusbar('File Downloaded Complete')
-	else:
-		statusbar('Folder Downloading...')
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
-		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		cmd = 'rsync -a '+conf['excludePattern']+' "'+conf['ssh']+':\"'+remoteDir+'\"" "'+localDir+'"'
-		ls = subprocess.Popen(cmd, shell=True)
-		statusbar('Folder Downloaded Complete')
+    if conf['_fileName']:
+        file_name   = conf['_fileName']
+        local_file  = local_dir + file_name
+        remote_file = remote_dir + file_name
+        # No --chmod: let the server assign ownership/perms via the SSH cert user
+        cmd = 'rsync -az {} {}:{}'.format(
+            shell_quote(local_file),
+            conf['ssh'],
+            shell_quote(remote_file)
+        )
+        rc, _, err = run_cmd(cmd)
+        if rc == 0:
+            statusbar('File uploaded: ' + file_name)
+        else:
+            statusbar('Upload failed: ' + err.strip())
+    else:
+        cmd = 'rsync -az {} {} {}:{}'.format(
+            conf['excludePattern'],
+            shell_quote(local_dir),
+            conf['ssh'],
+            shell_quote(remote_dir)
+        )
+        rc, _, err = run_cmd(cmd)
+        if rc == 0:
+            statusbar('Folder uploaded')
+        else:
+            statusbar('Folder upload failed: ' + err.strip())
 
-	return True
+    return rc == 0
 
-# Delete Files Or Folders
-def delete(conf,self,syncType=False):
-	if conf['_fileName']:
-		cmd = 'ssh ' + conf['ssh'] + ' rm '+conf['remoteDir']+conf['_clearDir']+'/'+conf['_fileName']
-		ls = subprocess.Popen(cmd, shell=True)
-		
-		if syncType == 'both':
-			filePath = conf['_localDir']+conf['_clearDir']+'/'+conf['_fileName']
-			if os.path.exists(filePath):
-				os.remove(filePath)
 
-			sublime.set_timeout(lambda: self.window.run_command('revert'), 10)
-			statusbar('Remote & Local Files Deleted Complete')
-		else:
-			statusbar('Remote File Deleted Complete')
-	else:
-		cmd = 'ssh ' + conf['ssh'] + ' rm -rf '+conf['remoteDir']+conf['_clearDir']
-		ls = subprocess.Popen(cmd, shell=True)
+def download(conf):
+    """Download a file or folder from the remote server."""
+    remote_base = conf['remoteDir'] + conf['_clearDir']
 
-		if syncType == 'both':
-			targetFolder = conf['_localDir']+conf['_clearDir']
-			if os.path.exists(targetFolder):
-				rmtree(targetFolder)
-			statusbar('Remote & Local Folders Deleted Complete')
-		else:
-			statusbar('Remote Folder Deleted Complete')
+    if conf['_fileName']:
+        file_name   = conf['_fileName']
 
-	return True
+        # Respect exclude list
+        for pattern in conf.get('exclude', []):
+            p = pattern.strip('/')
+            if file_name == p or file_name.endswith('/' + p):
+                statusbar('Skipped excluded file: ' + p)
+                return False
 
-# Synchronize between Remote & Local Folders
-def sync(conf,target=False):	
-	localDir = conf['_localDir']+conf['_clearDir']
-	remoteDir = conf['remoteDir']+conf['_clearDir']
-	if re.search('/$', localDir) is None:
-		localDir += '/'
+        remote_file = remote_base + '/' + file_name
+        local_file  = conf['_localDir'] + conf['_clearDir'] + '/' + file_name
+        cmd = 'rsync -az {}:{} {}'.format(
+            conf['ssh'],
+            shell_quote(remote_file),
+            shell_quote(local_file)
+        )
+        rc, _, err = run_cmd(cmd)
+        if rc == 0:
+            statusbar('File downloaded: ' + file_name)
+        else:
+            statusbar('Download failed: ' + err.strip())
+        return rc == 0
 
-	if re.search('/$', remoteDir) is None:
-		remoteDir += '/'
+    else:
+        remote_dir = remote_base + '/'
+        local_dir  = conf['_localDir'] + conf['_clearDir'] + '/'
+        statusbar('Downloading folder…')
+        cmd = 'rsync -az {} {}:{} {}'.format(
+            conf['excludePattern'],
+            conf['ssh'],
+            shell_quote(remote_dir),
+            shell_quote(local_dir)
+        )
+        rc, _, err = run_cmd(cmd)
+        if rc == 0:
+            statusbar('Folder downloaded')
+        else:
+            statusbar('Folder download failed: ' + err.strip())
+        return rc == 0
 
-	if target == 'remote':
-		cmd = 'rsync --chmod=a+rwx,g-w,o-w -avc --delete '+conf['excludePattern']+' "'+localDir+'" "'+conf['ssh']+':\"'+remoteDir + '\""'
-		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		out, err =  ls.communicate()
-		out = out.decode('UTF-8')
-		print(out)
-		statusbar('Remote Folder Synchronized With Local Successfully')
-	else:
-		cmd = 'rsync -avc --delete '+conf['excludePattern']+' "'+conf['ssh']+':\"'+remoteDir+'\"" "'+localDir+'"'
-		print('CMD:', cmd)
-		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		out, err =  ls.communicate()
-		out = out.decode('UTF-8')
-		print(out)
-		statusbar('Local Folder Synchronized With Remote Successfully')
 
-global renameConf
-# Rename Files Or Folders
-def rename(newName=False):
-	global renameConf
-	if not newName:
-		renameConf = False
-		return False
-	
-	conf = renameConf
-	if conf['_fileName']:
-		remoteDir = conf['remoteDir']+conf['_clearDir']+'/'
-		oldRemoteFile = remoteDir+conf['_fileName']
-		newRemoteFile = remoteDir+newName
-		cmd = 'ssh ' + conf['ssh'] + ' mv '+oldRemoteFile+' '+newRemoteFile
-		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def delete(conf, window, sync_type=False):
+    """
+    Delete remote file/folder, and optionally the local copy too.
+    Always asks for confirmation first.
+    sync_type: 'remote' | 'both'
+    """
+    target = conf['_fileName'] or os.path.basename(conf['_clearDir'])
+    scope  = 'remote only' if sync_type != 'both' else 'remote AND local'
 
-		localDir = conf['_localDir']+conf['_clearDir']+'/'
-		oldLocalFile = localDir+conf['_fileName']
-		newLocalFile = localDir+newName
-		os.rename(oldLocalFile, newLocalFile)
+    if not confirm(
+        'XFS — Confirm Delete',
+        'Delete {} ({})?\n\n{}'.format(target, scope,
+            'This cannot be undone.' if sync_type == 'both'
+            else 'Local copy will be kept.')
+    ):
+        statusbar('Delete cancelled')
+        return False
 
-		statusbar('File Renamed Successfully')
-	else:
-		rootChanged = False
-		oldFolderName = os.path.basename(conf['_clearDir'])
+    if conf['_fileName']:
+        remote_path = '{}{}/{}'.format(
+            conf['remoteDir'], conf['_clearDir'], conf['_fileName'])
+        rc, _, err = run_cmd('ssh {} "rm -f {}"'.format(
+            conf['ssh'], shell_quote(remote_path)))
 
-		if conf['_filePath'] == conf['_clearDir']:
-			rootChanged = True
-			oldRemoteFolder = conf['remoteDir']
-		else:
-			oldRemoteFolder = conf['remoteDir']+conf['_clearDir']+'/'
+        if rc != 0:
+            statusbar('Remote delete failed: ' + err.strip())
+            return False
 
-		newRemoteFolder = re.sub(oldFolderName+'/$',newName+'/',oldRemoteFolder)
+        if sync_type == 'both':
+            local_path = '{}{}/{}'.format(
+                conf['_localDir'], conf['_clearDir'], conf['_fileName'])
+            if os.path.exists(local_path):
+                os.remove(local_path)
+            sublime.set_timeout(lambda: window.run_command('revert'), 10)
+            statusbar('Remote & local file deleted')
+        else:
+            statusbar('Remote file deleted')
 
-		oldLocalFolder = conf['_filePath']
-		newLocalFolder = re.sub(oldFolderName+'$',newName,oldLocalFolder)
+    else:
+        remote_path = conf['remoteDir'] + conf['_clearDir']
+        rc, _, err = run_cmd('ssh {} "rm -rf {}"'.format(
+            conf['ssh'], shell_quote(remote_path)))
 
-		cmd = 'ssh ' + conf['ssh'] + ' mv '+oldRemoteFolder+' '+newRemoteFolder
+        if rc != 0:
+            statusbar('Remote delete failed: ' + err.strip())
+            return False
 
-		ls = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		out, err =  ls.communicate()
-		out = out.decode('UTF-8')
-		err = err.decode('UTF-8')
+        if sync_type == 'both':
+            local_path = conf['_localDir'] + conf['_clearDir']
+            if os.path.exists(local_path):
+                rmtree(local_path)
+            statusbar('Remote & local folder deleted')
+        else:
+            statusbar('Remote folder deleted')
 
-		if len(err):
-			statusbar('\nAn Error Has Occurred While Folder Renaming')
-			print(err)
-		else:
-			if rootChanged:
-				confPath = conf['_localDir']+'xfs-config.json'
-				f = open(confPath, 'r')
-				clearConf = json.load(f)
-				f.close()
-				clearConf['remoteDir'] = newRemoteFolder
-				with open(confPath, 'w') as outfile:
-					json.dump(clearConf, outfile, indent=4)
+    return True
 
-			os.rename(oldLocalFolder, newLocalFolder)
-			statusbar('Folder Renamed Successfully')
 
-# Get Configuration File
-def getConfig(path):
-	chunks = path.split('/')
-	while len(chunks):
-		localDir = '/'.join(chunks)
-		if os.path.isfile(localDir + '/xfs-config.json'):
-			f = open(localDir + '/xfs-config.json',)
-			conf = json.load(f)
-			f.close()
+def sync(conf, target='local'):
+    """
+    Bidirectional sync helper.
+    target='remote' : push local → remote
+    target='local'  : pull remote → local
+    """
+    local_dir  = conf['_localDir'] + conf['_clearDir']
+    remote_dir = conf['remoteDir'] + conf['_clearDir']
 
-			conf['_filePath'] = path
-			conf['_localDir'] = localDir
-			if os.path.isfile(path):
-				conf['_fileName'] = os.path.basename(path)
-				conf['_clearDir'] = os.path.dirname(path.replace(localDir,''))
-			else:
-				conf['_fileName'] = False
-				conf['_clearDir'] = path.replace(localDir,'')
+    if not local_dir.endswith('/'):
+        local_dir += '/'
+    if not remote_dir.endswith('/'):
+        remote_dir += '/'
 
-			
-			print('>>>>',conf['_clearDir'])
-			if conf['_clearDir']+'/' == conf['_localDir']:
-				conf['_clearDir'] = ''
+    if target == 'remote':
+        statusbar('Syncing local → remote…')
+        cmd = 'rsync -az --delete --delete-excluded {} {} {}:{}'.format(
+            conf['excludePattern'],
+            shell_quote(local_dir),
+            conf['ssh'],
+            shell_quote(remote_dir)
+        )
+    else:
+        statusbar('Syncing remote → local…')
+        # No --delete-excluded here: excluded files (e.g. xfs-config.json)
+        # must never be removed from the local side even if absent on remote.
+        cmd = 'rsync -az --delete {} {}:{} {}'.format(
+            conf['excludePattern'],
+            conf['ssh'],
+            shell_quote(remote_dir),
+            shell_quote(local_dir)
+        )
 
-			if len(conf['exclude']) > 1:
-				exclude = ','.join('"{0}"'.format(e) for e in conf['exclude'])
-				conf['excludePattern'] = '--exclude={'+exclude+'}'
-			elif len(conf['exclude']) == 1:
-				conf['excludePattern'] = '--exclude "'+conf['exclude'][0]+'"'
-			else:
-				conf['excludePattern'] = ''
+    rc, out, err = run_cmd(cmd)
+    if out:
+        print('[XFS sync]', out)
+    if err:
+        print('[XFS sync err]', err)
 
-			return conf;
-			break
-		chunks.pop()		
+    if rc == 0:
+        statusbar('Sync complete ({} → {})'.format(
+            'local', 'remote') if target == 'remote' else 'Sync complete (remote → local)')
+    else:
+        statusbar('Sync failed: ' + err.strip())
 
-	return False
+    return rc == 0
 
-# Upload On Save
+
+# ─────────────────────────────────────────────
+#  Rename (global state — Sublime input panel)
+# ─────────────────────────────────────────────
+
+_rename_conf = None
+
+
+def rename(new_name=False):
+    global _rename_conf
+    if not new_name:
+        _rename_conf = None
+        return
+
+    conf = _rename_conf
+
+    if conf['_fileName']:
+        remote_dir      = conf['remoteDir'] + conf['_clearDir'] + '/'
+        old_remote_file = remote_dir + conf['_fileName']
+        new_remote_file = remote_dir + new_name
+        rc, _, err = run_cmd('ssh {} "mv {} {}"'.format(
+            conf['ssh'],
+            shell_quote(old_remote_file),
+            shell_quote(new_remote_file)
+        ))
+        if rc != 0:
+            statusbar('Remote rename failed: ' + err.strip())
+            return
+
+        local_dir      = conf['_localDir'] + conf['_clearDir'] + '/'
+        old_local_file = local_dir + conf['_fileName']
+        new_local_file = local_dir + new_name
+        os.rename(old_local_file, new_local_file)
+        statusbar('File renamed')
+
+    else:
+        old_folder_name = os.path.basename(conf['_clearDir'])
+        root_changed    = conf['_filePath'] == conf['_clearDir']
+
+        old_remote_folder = (conf['remoteDir']
+                             if root_changed
+                             else conf['remoteDir'] + conf['_clearDir'] + '/')
+        new_remote_folder = re.sub(
+            re.escape(old_folder_name) + r'/?$',
+            new_name,
+            old_remote_folder
+        )
+        if not new_remote_folder.endswith('/'):
+            new_remote_folder += '/'
+
+        old_local_folder = conf['_filePath']
+        new_local_folder = re.sub(
+            re.escape(old_folder_name) + r'$',
+            new_name,
+            old_local_folder
+        )
+
+        rc, _, err = run_cmd('ssh {} "mv {} {}"'.format(
+            conf['ssh'],
+            shell_quote(old_remote_folder),
+            shell_quote(new_remote_folder)
+        ))
+        if rc != 0:
+            statusbar('Remote rename failed: ' + err.strip())
+            return
+
+        if root_changed:
+            config_path = conf['_localDir'] + '/' + CONFIG_FILE
+            try:
+                with open(config_path) as f:
+                    raw = json.load(f)
+                raw['remoteDir'] = new_remote_folder
+                with open(config_path, 'w') as f:
+                    json.dump(raw, f, indent=4)
+            except OSError as e:
+                statusbar('Could not update config: ' + str(e))
+
+        os.rename(old_local_folder, new_local_folder)
+        statusbar('Folder renamed')
+
+
+# ─────────────────────────────────────────────
+#  Upload-on-save: skip newly created files
+# ─────────────────────────────────────────────
+
 class XfsSyncCommand(sublime_plugin.ViewEventListener):
-	def on_post_save(self):
-		conf = getConfig(self.view.file_name())
-		if not conf or not conf['upload_on_save']:
-			return False
-		upload(conf)
+    """
+    Uploads on every save EXCEPT the very first save of a brand-new file.
 
-# Upload File
+    Detection: on_pre_save checks whether the file exists on disk yet.
+    If it doesn't, this save is the creation event — flag it and skip once.
+    Every subsequent save (file already on disk) uploads normally.
+    """
+
+    # view ids whose current save is a creation event — skip upload once
+    _creating = set()
+
+    @classmethod
+    def is_applicable(cls, settings):
+        return True
+
+    def on_pre_save(self):
+        file_name = self.view.file_name()
+        if file_name and not os.path.exists(file_name):
+            XfsSyncCommand._creating.add(self.view.id())
+
+    def on_post_save(self):
+        file_name = self.view.file_name()
+        if not file_name:
+            return
+
+        # Creation save — skip upload, clear the flag
+        if self.view.id() in XfsSyncCommand._creating:
+            XfsSyncCommand._creating.discard(self.view.id())
+            statusbar('New file created — skipping upload')
+            return
+
+        conf = get_config(file_name)
+        if not conf or not conf.get('upload_on_save'):
+            return
+
+        # Respect exclude list
+        rel_path  = os.path.relpath(file_name, conf['_localDir'])
+        base_name = os.path.basename(file_name)
+        for pattern in conf.get('exclude', []):
+            p = pattern.strip('/')
+            if base_name == p or rel_path.startswith(p + os.sep) or rel_path == p:
+                statusbar('Skipped excluded file: ' + p)
+                return
+
+        upload(conf)
+
+    def on_close(self):
+        XfsSyncCommand._creating.discard(self.view.id())
+
+
+# ─────────────────────────────────────────────
+#  Window commands — Files
+# ─────────────────────────────────────────────
+
 class XfsUploadFileCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		upload(conf)
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            upload(conf)
 
-	def is_visible(args, paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isfile(paths[0]) and bool(get_config(paths[0]))
 
-# Download File
+
 class XfsDownloadFileCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		download(conf, self)
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            download(conf)
 
-	def is_visible(args, paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isfile(paths[0]) and bool(get_config(paths[0]))
 
-# Upload Folder
-class XfsUploadFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
 
-		upload(conf)
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Downlload Folder
-class XfsDownloadFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-
-		download(conf, self)
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Sync Local Folder
-class XfsSyncLocalFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		sync(conf, 'local')
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Sync Remote Folder
-class XfsSyncRemoteFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		sync(conf, 'remote')
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Delete Remote File
 class XfsDeleteRemoteFileCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		delete(conf, self, 'remote')
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            delete(conf, self.window, 'remote')
 
-	def is_visible(args,paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isfile(paths[0]) and bool(get_config(paths[0]))
 
-# Delete Remote & Local File
+
 class XfsDeleteBothFilesCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		delete(conf, self, 'both')
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            delete(conf, self.window, 'both')
 
-	def is_visible(args,paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isfile(paths[0]) and bool(get_config(paths[0]))
 
-# Delete Remote Folder
-class XfsDeleteRemoteFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		delete(conf, self, 'remote')
 
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Delete Remote & Local Folders
-class XfsDeleteBothFoldersCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		delete(conf, self, 'both')
-
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True
-
-# Rename File
 class XfsRenameFileCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		global renameConf
-		renameConf = conf
-		self.window.show_input_panel('Rename File',conf['_fileName'],rename,None,rename)
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if not conf:
+            return
+        global _rename_conf
+        _rename_conf = conf
+        self.window.show_input_panel(
+            'Rename File', conf['_fileName'], rename, None, rename)
 
-	def is_visible(args,paths=[]):
-		if os.path.isdir(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True	
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isfile(paths[0]) and bool(get_config(paths[0]))
 
-# Rename Folder
+
+# ─────────────────────────────────────────────
+#  Window commands — Folders
+# ─────────────────────────────────────────────
+
+class XfsUploadFolderCommand(sublime_plugin.WindowCommand):
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            upload(conf)
+
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isdir(paths[0]) and bool(get_config(paths[0]))
+
+
+class XfsDownloadFolderCommand(sublime_plugin.WindowCommand):
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            download(conf)
+
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isdir(paths[0]) and bool(get_config(paths[0]))
+
+
+class XfsSyncLocalFolderCommand(sublime_plugin.WindowCommand):
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            sync(conf, 'local')
+
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isdir(paths[0]) and bool(get_config(paths[0]))
+
+
+class XfsSyncRemoteFolderCommand(sublime_plugin.WindowCommand):
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            sync(conf, 'remote')
+
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isdir(paths[0]) and bool(get_config(paths[0]))
+
+
+class XfsDeleteRemoteFolderCommand(sublime_plugin.WindowCommand):
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            delete(conf, self.window, 'remote')
+
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isdir(paths[0]) and bool(get_config(paths[0]))
+
+
+class XfsDeleteBothFoldersCommand(sublime_plugin.WindowCommand):
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if conf:
+            delete(conf, self.window, 'both')
+
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isdir(paths[0]) and bool(get_config(paths[0]))
+
+
 class XfsRenameFolderCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		conf = getConfig(paths[0])
-		if not conf:
-			return False
-		global renameConf
-		renameConf = conf
-		self.window.show_input_panel('Rename Folder',os.path.basename(conf['_clearDir']),rename,None,rename)
+    def run(self, paths=[]):
+        conf = get_config(paths[0])
+        if not conf:
+            return
+        global _rename_conf
+        _rename_conf = conf
+        self.window.show_input_panel(
+            'Rename Folder',
+            os.path.basename(conf['_clearDir']),
+            rename, None, rename
+        )
 
-	def is_visible(args,paths=[]):
-		if os.path.isfile(paths[0]) or not getConfig(paths[0]):
-		 	return False
-		else:
-			return True		
+    def is_visible(self, paths=[]):
+        return bool(paths) and os.path.isdir(paths[0]) and bool(get_config(paths[0]))
 
-# Configuration
+
+# ─────────────────────────────────────────────
+#  Configuration
+# ─────────────────────────────────────────────
+
 class XfsConfigurationCommand(sublime_plugin.WindowCommand):
-	def run(self, paths=[]):
-		print('SETTING UP CONFIG')
-		if len(paths):
-			confPath = paths[0]+'/xfs-config.json'
-			if not os.path.isfile(confPath):
-				defaultConf = sublime.packages_path() + '/XFS/XFS.default-config'
-				print('Create New Config From: ', defaultConf, 'To:', confPath)
-				copyfile(defaultConf, confPath)
+    def run(self, paths=[]):
+        if not paths:
+            return
+        conf_path = paths[0] + '/' + CONFIG_FILE
+        if not os.path.isfile(conf_path):
+            default = sublime.packages_path() + '/XFS/XFS.default-config'
+            try:
+                copyfile(default, conf_path)
+            except OSError as e:
+                statusbar('Could not create config: ' + str(e))
+                return
+        self.window.open_file(conf_path, sublime.ENCODED_POSITION)
 
-			self.window.open_file(confPath, sublime.ENCODED_POSITION)
-
-	def is_visible(args,paths=[]):
-		return True
-'''
+    def is_visible(self, paths=[]):
+        return True
